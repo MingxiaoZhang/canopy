@@ -12,7 +12,7 @@ class FileStorage:
 
     def setup_directories(self):
         """Create necessary directory structure"""
-        for subdir in ['html', 'css', 'screenshots', 'logs']:
+        for subdir in ['html', 'css', 'screenshot', 'logs']:
             (self.base_path / subdir).mkdir(parents=True, exist_ok=True)
 
     def get_file_path(self, url, content_type='html'):
@@ -72,7 +72,7 @@ class FileStorage:
     def get_storage_stats(self):
         """Get storage statistics"""
         stats = {}
-        for content_type in ['html', 'css', 'screenshots', 'logs']:
+        for content_type in ['html', 'css', 'screenshot', 'logs']:
             type_path = self.base_path / content_type
             if type_path.exists():
                 file_count = sum(1 for _ in type_path.rglob('*') if _.is_file())

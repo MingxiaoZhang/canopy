@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.Python
+.pytest_cache/
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Crawled data (optional - uncomment if you don't want to include in image)
+# crawl_data/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+github-setup.md
+
+# Setup scripts (not needed in container)
+setup_browser.sh
+
+# Docker files
+Dockerfile
+.dockerignore

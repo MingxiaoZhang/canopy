@@ -10,14 +10,14 @@ from src.crawler import BasicCrawler
 
 async def main():
     """Main entry point for the crawler"""
-    # Example usage - testing with a site that has CSS
+    # Example usage - back to working URLs
     start_urls = [
-        'https://example.com',  # Has inline CSS
-        # Add more URLs here
+        'https://httpbin.org/html',     # Good for testing
+        'https://example.com',          # Has inline CSS and robots.txt
     ]
 
-    # Create and run crawler
-    crawler = BasicCrawler(start_urls, max_pages=10)
+    # Create and run crawler with error handling enabled
+    crawler = BasicCrawler(start_urls, max_pages=10, max_retries=3)
     await crawler.crawl()
 
     # Print storage statistics
