@@ -9,25 +9,58 @@ from .parser import HTMLParser
 from .screenshot import ScreenshotCapture
 from .rate_limiter import RateLimiter
 from .error_handler import ErrorHandler, RetryConfig
+from .deduplication import DuplicationManager
 
 class BasicCrawler:
-    def __init__(self, start_urls, max_pages=100, enable_screenshots=True, crawl_delay=1.0, max_retries=3):
+    def __init__(self, start_urls, max_pages=100, enable_screenshots=True, crawl_delay=1.0, max_retries=3, enable_deduplication=True):
         self.start_urls = start_urls
         self.max_pages = max_pages
         self.visited = set()
-        self.queue = deque(start_urls)
+        self.queue = deque()
         self.session = None
         self.storage = FileStorage()
         self.enable_screenshots = enable_screenshots
         self.screenshot_capture = None
         self.rate_limiter = RateLimiter(default_delay=crawl_delay, user_agent="TarzanCrawler/1.0")
         self.error_handler = ErrorHandler(RetryConfig(max_attempts=max_retries))
+        self.dedup_manager = DuplicationManager() if enable_deduplication else None
+
+        # Initialize queue with deduplication
+        self._initialize_queue(start_urls)
 
         # Set up logging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
+
+    def _initialize_queue(self, urls):
+        """Initialize crawl queue with deduplication"""
+        for url in urls:
+            self._add_url_to_queue(url)
+
+    def _add_url_to_queue(self, url: str) -> bool:
+        """
+        Add URL to queue with deduplication check
+
+        Returns:
+            True if URL was added, False if duplicate
+        """
+        if self.dedup_manager:
+            should_crawl, canonical_url, reason = self.dedup_manager.should_crawl(url)
+            if should_crawl:
+                self.queue.append(canonical_url)
+                print(f"➕ Added to queue: {canonical_url}")
+                return True
+            else:
+                print(f"⏭️  Skipping duplicate: {url} ({reason})")
+                return False
+        else:
+            # No deduplication - add directly
+            if url not in self.visited:
+                self.queue.append(url)
+                return True
+            return False
 
     async def fetch(self, url):
         """Fetch a single URL and return its content with error handling and retries"""
@@ -100,12 +133,21 @@ class BasicCrawler:
                 return None
 
     async def crawl_url(self, url):
-        """Crawl a single URL and extract data with comprehensive error handling"""
+        """Crawl a single URL and extract data with comprehensive error handling and deduplication"""
         try:
             content = await self.fetch(url)
 
             if not content:
                 return
+
+            # Check for content deduplication
+            if self.dedup_manager:
+                is_duplicate, original_url = self.dedup_manager.is_duplicate_content(content, url, 'html')
+                if is_duplicate:
+                    print(f"🔄 Duplicate content detected for {url} (original: {original_url})")
+                    # Still add to visited set to track progress
+                    self.visited.add(url)
+                    return
 
             # Parse HTML content with error handling
             try:
@@ -118,7 +160,7 @@ class BasicCrawler:
             # Save HTML content with error handling
             try:
                 html_path = await self.storage.save_content(url, content, 'html')
-                print(f"Saved HTML: {html_path}")
+                print(f"💾 Saved HTML: {html_path}")
             except Exception as e:
                 logging.error(f"Failed to save HTML for {url}: {e}")
 
@@ -143,13 +185,19 @@ class BasicCrawler:
                 except Exception as e:
                     logging.warning(f"Failed to capture screenshot for {url}: {e}")
 
-            # Add new links to queue (same domain only for now)
+            # Add new links to queue with deduplication
             try:
                 current_domain = urlparse(url).netloc
+                new_links_added = 0
                 for link in parsed_data['links']:
                     link_domain = urlparse(link).netloc
                     if link_domain == current_domain and link not in self.visited:
-                        self.queue.append(link)
+                        if self._add_url_to_queue(link):
+                            new_links_added += 1
+
+                if new_links_added > 0:
+                    print(f"🔗 Added {new_links_added} new links to queue")
+
             except Exception as e:
                 logging.warning(f"Failed to process links for {url}: {e}")
 
@@ -247,6 +295,22 @@ class BasicCrawler:
                         print(f"  Failed URLs list: {failed_urls[:5]}{'...' if len(failed_urls) > 5 else ''}")
                 else:
                     print("\n✅ No errors encountered!")
+
+                # Print deduplication stats
+                if self.dedup_manager:
+                    print("\n🔄 Deduplication Stats:")
+                    dedup_stats = self.dedup_manager.get_deduplication_stats()
+                    url_stats = dedup_stats['url_stats']
+                    content_stats = dedup_stats['content_stats']
+                    efficiency = dedup_stats['efficiency']
+
+                    print(f"  URLs processed: {url_stats['urls_processed']}")
+                    print(f"  Duplicate URLs skipped: {url_stats['duplicate_urls']}")
+                    print(f"  Unique URLs: {url_stats['canonical_urls']}")
+                    print(f"  Duplicate content detected: {url_stats['duplicate_content']}")
+                    print(f"  URL deduplication rate: {efficiency['url_dedup_rate']:.1f}%")
+                    print(f"  Content deduplication rate: {efficiency['content_dedup_rate']:.1f}%")
+                    print(f"  Memory efficiency: {'Bloom filter enabled' if efficiency['bloom_filter_enabled'] else 'Set-based tracking'}")
 
                 # Print rate limiting stats
                 print("\n📊 Rate Limiting Stats:")

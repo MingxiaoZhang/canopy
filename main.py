@@ -10,14 +10,18 @@ from src.crawler import BasicCrawler
 
 async def main():
     """Main entry point for the crawler"""
-    # Example usage - back to working URLs
+    # Example usage - testing deduplication with duplicate URLs
     start_urls = [
-        'https://httpbin.org/html',     # Good for testing
-        'https://example.com',          # Has inline CSS and robots.txt
+        'https://httpbin.org/html',           # Good for testing
+        'https://HTTPBIN.ORG/HTML',           # Same as above (case difference)
+        'https://httpbin.org/html?utm_source=test',  # Same with tracking param
+        'https://example.com',                # Has inline CSS and robots.txt
+        'https://www.example.com',            # Same as above (www difference)
+        'https://example.com/',               # Same with trailing slash
     ]
 
-    # Create and run crawler with error handling enabled
-    crawler = BasicCrawler(start_urls, max_pages=10, max_retries=3)
+    # Create and run crawler with deduplication enabled
+    crawler = BasicCrawler(start_urls, max_pages=10, max_retries=3, enable_deduplication=True)
     await crawler.crawl()
 
     # Print storage statistics
