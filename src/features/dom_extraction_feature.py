@@ -39,22 +39,21 @@ class DOMExtractionFeature(CrawlerFeature):
             # Find screenshot feature to get access to the page object
             screenshot_feature = None
             for feature in crawler.features:
-                if hasattr(feature, 'screenshot_capture') and feature.screenshot_capture:
+                if hasattr(feature, 'page') and feature.page:
                     screenshot_feature = feature
                     break
 
-            if screenshot_feature and hasattr(screenshot_feature.screenshot_capture, 'page'):
-                page = screenshot_feature.screenshot_capture.page
-                if page:
-                    # Extract DOM tree using existing extractor
-                    dom_tree = await self.dom_extractor.extract_dom_tree(
-                        page, url,
-                        capture_screenshots=self.capture_screenshots,
-                        max_depth=self.max_depth,
-                        screenshot_components=self.screenshot_components
-                    )
-                    node_count = self.dom_extractor._count_nodes(dom_tree)
-                    print(f"🌳 DOM tree extracted with {node_count} nodes")
+            if screenshot_feature and screenshot_feature.page:
+                page = screenshot_feature.page
+                # Extract DOM tree using existing extractor
+                dom_tree = await self.dom_extractor.extract_dom_tree(
+                    page, url,
+                    capture_screenshots=self.capture_screenshots,
+                    max_depth=self.max_depth,
+                    screenshot_components=self.screenshot_components
+                )
+                node_count = self.dom_extractor._count_nodes(dom_tree)
+                print(f"🌳 DOM tree extracted with {node_count} nodes")
 
         except Exception as e:
             logging.warning(f"Failed to extract DOM tree for {url}: {e}")

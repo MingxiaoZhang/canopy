@@ -33,11 +33,7 @@ class ScreenshotFeature(CrawlerFeature):
 
         print("🖼️ Screenshot feature initialized")
 
-        # Set up output directory
-        today = datetime.now()
-        date_path = f"{today.year:04d}/{today.month:02d}/{today.day:02d}"
-        self.output_dir = os.path.join("crawl_data", "screenshot", date_path)
-        os.makedirs(self.output_dir, exist_ok=True)
+        # Note: Output directory will be created per-website in process_url
 
     async def before_crawl(self, crawler):
         """Setup before crawling starts"""
@@ -78,12 +74,21 @@ class ScreenshotFeature(CrawlerFeature):
             return
 
         try:
-            # Generate output filename
+            # Generate website-based directory and filename
             from hashlib import md5
-            url_hash = md5(url.encode()).hexdigest()[:32]
-            domain = url.split('/')[2] if '//' in url else 'unknown'
-            filename = f"{domain}_{url_hash}.png"
-            filepath = os.path.join(self.output_dir, filename)
+            from urllib.parse import urlparse
+
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
+            url_hash = md5(url.encode()).hexdigest()[:16]
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            # Create website-based directory structure
+            screenshot_dir = os.path.join("crawl_data", domain, "screenshot")
+            os.makedirs(screenshot_dir, exist_ok=True)
+
+            filename = f"{url_hash}_{timestamp}.png"
+            filepath = os.path.join(screenshot_dir, filename)
 
             # Navigate to URL and capture screenshot
             await self.page.goto(url, wait_until='networkidle', timeout=30000)

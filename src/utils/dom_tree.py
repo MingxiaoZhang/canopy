@@ -43,18 +43,6 @@ class DOMTreeExtractor:
 
     def __init__(self, base_output_dir: str = "crawl_data"):
         self.base_output_dir = base_output_dir
-        self.dom_output_dir = os.path.join(base_output_dir, "dom_trees")
-        self.component_screenshot_dir = os.path.join(base_output_dir, "component_screenshots")
-
-        # Create output directories with date structure
-        today = datetime.now()
-        date_path = f"{today.year:04d}/{today.month:02d}/{today.day:02d}"
-
-        self.dom_output_dir = os.path.join(self.dom_output_dir, date_path)
-        self.component_screenshot_dir = os.path.join(self.component_screenshot_dir, date_path)
-
-        os.makedirs(self.dom_output_dir, exist_ok=True)
-        os.makedirs(self.component_screenshot_dir, exist_ok=True)
 
     async def extract_dom_tree(self, page: Page, url: str,
                              capture_screenshots: bool = True,
@@ -80,7 +68,7 @@ class DOMTreeExtractor:
                 # Common ID-based components
                 '#header', '#navigation', '#main', '#sidebar', '#footer',
                 # Basic HTML elements that usually contain meaningful content
-                'h1', 'h2', 'h3', 'div', 'body'
+                'h1', 'h2', 'h3', 'div', 'body', 'a', 'p', 'span', 'img'
             ]
 
         print(f"🌳 Extracting DOM tree for: {url}")
@@ -99,11 +87,16 @@ class DOMTreeExtractor:
             page, html_element, url, depth=0, max_depth=max_depth
         )
 
-        # Capture component screenshots if enabled
+        # Capture component screenshots and get path mapping
+        screenshot_mapping = {}
         if capture_screenshots:
-            await self._capture_component_screenshots(
+            screenshot_mapping = await self._capture_component_screenshots(
                 page, url, screenshot_components
             )
+
+        # Link screenshots to DOM nodes
+        if screenshot_mapping:
+            self._link_screenshots_to_nodes(root_node, screenshot_mapping)
 
         # Save DOM tree to JSON
         await self._save_dom_tree(root_node, url)
@@ -232,43 +225,66 @@ class DOMTreeExtractor:
             return f"/{xpath_part}"
 
     async def _capture_component_screenshots(self, page: Page, url: str,
-                                           selectors: List[str]):
+                                           selectors: List[str]) -> Dict[str, str]:
         """Capture isolated screenshots of specific components"""
+        from urllib.parse import urlparse
+
+        # Parse URL for organization
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
-        domain = url.split('/')[2] if '//' in url else 'unknown'
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # Create website-based directory structure
+        component_dir = os.path.join(self.base_output_dir, domain, 'component_screenshots')
+        os.makedirs(component_dir, exist_ok=True)
 
         print(f"📸 Capturing component screenshots...")
+        screenshot_count = 0
+        screenshot_mapping = {}  # Maps position keys to file paths
 
         for selector in selectors:
             try:
-                # Check if element exists and is visible
-                locator = page.locator(selector).first
-                element_count = await locator.count()
+                # Find ALL elements matching this selector
+                locators = page.locator(selector)
+                element_count = await locators.count()
 
                 if element_count > 0:
-                    # Check if element is visible
-                    is_visible = await locator.is_visible()
+                    print(f"  🔍 Found {element_count} elements for {selector}")
 
-                    if is_visible:
-                        # Get element info for filename
-                        bounding_box = await locator.bounding_box()
+                    for i in range(element_count):
+                        try:
+                            element = locators.nth(i)
+                            is_visible = await element.is_visible()
 
-                        if bounding_box and bounding_box['width'] > 0 and bounding_box['height'] > 0:
-                            # Generate safe filename
-                            selector_safe = self._sanitize_filename(selector)
-                            filename = f"{domain}_{url_hash}_{selector_safe}.png"
-                            filepath = os.path.join(self.component_screenshot_dir, filename)
+                            if is_visible:
+                                bounding_box = await element.bounding_box()
 
-                            # Capture isolated screenshot of the element
-                            await locator.screenshot(path=filepath)
-                            print(f"  ✅ {selector} -> {filename}")
-                        else:
-                            print(f"  ⚠️ {selector} has zero dimensions, skipping")
-                    else:
-                        print(f"  ⚠️ {selector} not visible, skipping")
+                                if bounding_box and bounding_box['width'] > 0 and bounding_box['height'] > 0:
+                                    # Generate unique filename with element index and position
+                                    selector_safe = self._sanitize_filename(selector)
+                                    element_id = f"x{int(bounding_box['x'])}_y{int(bounding_box['y'])}"
+                                    filename = f"{url_hash}_{timestamp}_{selector_safe}_{i+1}_{element_id}.png"
+                                    filepath = os.path.join(component_dir, filename)
+
+                                    # Capture screenshot
+                                    await element.screenshot(path=filepath)
+                                    screenshot_count += 1
+                                    print(f"    ✅ {selector}[{i+1}] -> {filename}")
+
+                                    # Store mapping using position as key
+                                    position_key = f"x{int(bounding_box['x'])}_y{int(bounding_box['y'])}"
+                                    screenshot_mapping[position_key] = filepath
+
+                        except Exception as e:
+                            print(f"    ⚠️ Failed to capture {selector}[{i+1}]: {str(e)[:30]}...")
+                            continue
 
             except Exception as e:
-                print(f"  ❌ Failed to capture {selector}: {str(e)[:50]}...")
+                print(f"  ❌ Failed to process {selector}: {str(e)[:50]}...")
+
+        print(f"📸 Captured {screenshot_count} component screenshots")
+        return screenshot_mapping
 
     def _sanitize_filename(self, selector: str) -> str:
         """Convert CSS selector to safe filename"""
@@ -283,12 +299,39 @@ class DOMTreeExtractor:
 
         return safe_name.strip('_')
 
+    def _link_screenshots_to_nodes(self, node: DOMNode, screenshot_mapping: Dict[str, str]):
+        """Recursively link screenshots to DOM nodes based on position"""
+        if node.bounding_box and screenshot_mapping:
+            # Generate position key from bounding box
+            x = int(node.bounding_box['x'])
+            y = int(node.bounding_box['y'])
+            position_key = f"x{x}_y{y}"
+
+            # Check if we have a screenshot for this position
+            if position_key in screenshot_mapping:
+                node.screenshot_path = screenshot_mapping[position_key]
+                print(f"    🔗 Linked screenshot to {node.tag_name} at {position_key}")
+
+        # Recursively process children
+        for child in node.children:
+            self._link_screenshots_to_nodes(child, screenshot_mapping)
+
     async def _save_dom_tree(self, dom_node: DOMNode, url: str):
         """Save DOM tree structure to JSON file"""
+        from urllib.parse import urlparse
+
+        # Parse URL for organization
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
-        domain = url.split('/')[2] if '//' in url else 'unknown'
-        filename = f"{domain}_{url_hash}_dom_tree.json"
-        filepath = os.path.join(self.dom_output_dir, filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # Create website-based directory structure
+        dom_dir = os.path.join(self.base_output_dir, domain, 'dom_trees')
+        os.makedirs(dom_dir, exist_ok=True)
+
+        filename = f"{url_hash}_{timestamp}_dom_tree.json"
+        filepath = os.path.join(dom_dir, filename)
 
         # Convert to dictionary for JSON serialization
         tree_data = {
@@ -299,7 +342,7 @@ class DOMTreeExtractor:
                 'total_nodes': self._count_nodes(dom_node),
                 'max_depth': self._get_max_depth(dom_node),
                 'extraction_timestamp': datetime.now().isoformat(),
-                'screenshot_dir': self.component_screenshot_dir
+                'component_screenshot_dir': os.path.join(self.base_output_dir, domain, 'component_screenshots')
             }
         }
 

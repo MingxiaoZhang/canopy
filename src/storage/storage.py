@@ -11,20 +11,19 @@ class FileStorage:
         self.setup_directories()
 
     def setup_directories(self):
-        """Create necessary directory structure"""
-        for subdir in ['html', 'css', 'screenshot', 'logs']:
-            (self.base_path / subdir).mkdir(parents=True, exist_ok=True)
+        """Create base directory structure - website-specific dirs created as needed"""
+        self.base_path.mkdir(parents=True, exist_ok=True)
 
     def get_file_path(self, url, content_type='html'):
-        """Generate a file path for storing content"""
+        """Generate a file path for storing content organized by website"""
         # Create a hash of the URL for filename
-        url_hash = hashlib.md5(url.encode()).hexdigest()
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:16]  # Shorter hash
 
         # Extract domain for organization
         domain = urlparse(url).netloc
 
-        # Date-based directory structure
-        date_str = datetime.now().strftime('%Y/%m/%d')
+        # Clean domain name for directory use
+        clean_domain = domain.replace('www.', '').replace(':', '_')
 
         # File extension mapping
         extensions = {
@@ -35,11 +34,12 @@ class FileStorage:
         }
         extension = extensions.get(content_type, '.txt')
 
-        # Construct filename with domain prefix
-        filename = f"{domain}_{url_hash}{extension}"
+        # Construct filename with timestamp for uniqueness
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{url_hash}_{timestamp}{extension}"
 
-        # Full path
-        file_path = self.base_path / content_type / date_str / filename
+        # Website-based directory structure: crawl_data/domain/content_type/
+        file_path = self.base_path / clean_domain / content_type / filename
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         return file_path
