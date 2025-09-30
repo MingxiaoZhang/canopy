@@ -2,10 +2,13 @@
 Graph Crawling Feature - Intelligent link discovery and graph-based crawling
 """
 
+import logging
 from typing import Set, Optional
-from ..utils.graph_crawler import GraphCrawlManager, GraphCrawlConfig, CrawlMode
+from ..graph_manager import GraphCrawlManager, GraphCrawlConfig, CrawlMode
 from .base import CrawlerFeature
 from ..crawler.result import CrawlResult
+
+logger = logging.getLogger(__name__)
 
 
 class GraphCrawlingFeature(CrawlerFeature):
@@ -43,7 +46,7 @@ class GraphCrawlingFeature(CrawlerFeature):
 
     async def initialize(self, crawler):
         """Initialize graph crawling capability"""
-        print(f"🕸️ Graph crawling initialized (mode={self.config.mode.value}, max_depth={self.config.max_depth})")
+        logger.info(f"Graph crawling initialized (mode={self.config.mode.value}, max_depth={self.config.max_depth})")
 
         # Initialize the graph crawl manager
         self.graph_manager = GraphCrawlManager(self.config)
@@ -54,7 +57,7 @@ class GraphCrawlingFeature(CrawlerFeature):
 
     async def before_crawl(self, crawler):
         """Setup before crawling starts"""
-        print("🕸️ Graph crawling ready")
+        logger.info("Graph crawling ready")
 
     async def process_url(self, url: str, result: CrawlResult, crawler):
         """Analyze links and update crawling graph"""
@@ -68,7 +71,7 @@ class GraphCrawlingFeature(CrawlerFeature):
             )
 
             if discovered_links:
-                print(f"🕸️ Discovered {len(discovered_links)} links from {url}")
+                logger.info(f"Discovered {len(discovered_links)} links from {url}")
 
                 # Show high-priority links
                 high_priority_links = [
@@ -77,7 +80,7 @@ class GraphCrawlingFeature(CrawlerFeature):
                 ]
 
                 if high_priority_links:
-                    print(f"  🔍 Found {len(high_priority_links)} high-priority links")
+                    logger.debug(f"Found {len(high_priority_links)} high-priority links")
 
                 # Store for statistics
                 self.discovered_links.extend(discovered_links)
@@ -85,9 +88,9 @@ class GraphCrawlingFeature(CrawlerFeature):
     async def finalize(self, crawler):
         """Clean up graph crawling resources and show statistics"""
         if self.graph_manager:
-            print("🕸️ Graph crawling statistics:")
-            print(f"  Discovered domains: {len(self.graph_manager.discovered_domains)}")
-            print(f"  Total links discovered: {len(self.discovered_links)}")
+            logger.info("Graph crawling statistics:")
+            logger.info(f"  Discovered domains: {len(self.graph_manager.discovered_domains)}")
+            logger.info(f"  Total links discovered: {len(self.discovered_links)}")
 
             if self.discovered_links:
                 # Show top domains
@@ -96,11 +99,11 @@ class GraphCrawlingFeature(CrawlerFeature):
                     domain_counts[link.domain] = domain_counts.get(link.domain, 0) + 1
 
                 top_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-                print(f"  Top discovered domains: {[f'{d}({c})' for d, c in top_domains]}")
+                logger.info(f"  Top discovered domains: {[f'{d}({c})' for d, c in top_domains]}")
 
                 # Show some example links
-                print(f"  Example links discovered:")
+                logger.info("  Example links discovered:")
                 for link in self.discovered_links[:3]:
-                    print(f"    - {link.url} (priority: {link.priority})")
+                    logger.info(f"    - {link.url} (priority: {link.priority})")
 
-        print("🕸️ Graph crawling completed")
+        logger.info("Graph crawling completed")

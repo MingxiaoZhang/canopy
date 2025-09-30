@@ -2,8 +2,10 @@
 Storage and persistence modules
 """
 
-from .storage import FileStorage
+from .file_storage import FileStorage
+from .content_type import ContentType
 
 __all__ = [
-    'FileStorage'
+    'FileStorage',
+    'ContentType'
 ]

@@ -6,7 +6,9 @@ import logging
 from typing import List, Optional
 from .base import CrawlerFeature
 from ..crawler.result import CrawlResult
-from ..utils.dom_tree import DOMTreeExtractor
+from ..dom import DOMTreeExtractor
+
+logger = logging.getLogger(__name__)
 
 
 class DOMExtractionFeature(CrawlerFeature):
@@ -21,14 +23,14 @@ class DOMExtractionFeature(CrawlerFeature):
 
     async def initialize(self, crawler):
         """Initialize DOM extraction capability"""
-        print(f"🌳 DOM extraction initialized (max_depth={self.max_depth})")
+        logger.info(f"DOM extraction initialized (max_depth={self.max_depth})")
 
         # Initialize DOM tree extractor
         self.dom_extractor = DOMTreeExtractor()
 
     async def before_crawl(self, crawler):
         """Setup before crawling starts"""
-        print("🌳 DOM extraction ready")
+        logger.info("DOM extraction ready")
 
     async def process_url(self, url: str, result: CrawlResult, crawler):
         """Extract DOM tree for the given URL"""
@@ -50,14 +52,15 @@ class DOMExtractionFeature(CrawlerFeature):
                     page, url,
                     capture_screenshots=self.capture_screenshots,
                     max_depth=self.max_depth,
-                    screenshot_components=self.screenshot_components
+                    screenshot_components=self.screenshot_components,
+                    storage=crawler.storage
                 )
                 node_count = self.dom_extractor._count_nodes(dom_tree)
-                print(f"🌳 DOM tree extracted with {node_count} nodes")
+                logger.info(f"DOM tree extracted with {node_count} nodes")
 
         except Exception as e:
-            logging.warning(f"Failed to extract DOM tree for {url}: {e}")
+            logger.warning(f"Failed to extract DOM tree for {url}: {e}")
 
     async def finalize(self, crawler):
         """Clean up DOM extraction resources"""
-        print("🌳 DOM extraction cleaned up")
+        logger.info("DOM extraction cleaned up")

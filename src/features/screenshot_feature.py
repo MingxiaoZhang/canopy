@@ -4,11 +4,17 @@ Screenshot Feature - Captures screenshots of web pages
 
 import os
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
+from hashlib import md5
+from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 from .base import CrawlerFeature
 from ..crawler.result import CrawlResult
+from ..storage import ContentType
+
+logger = logging.getLogger(__name__)
 
 
 class ScreenshotFeature(CrawlerFeature):
@@ -31,7 +37,7 @@ class ScreenshotFeature(CrawlerFeature):
         if not self.enabled:
             return
 
-        print("🖼️ Screenshot feature initialized")
+        logger.info("Screenshot feature initialized")
 
         # Note: Output directory will be created per-website in process_url
 
@@ -40,7 +46,7 @@ class ScreenshotFeature(CrawlerFeature):
         if not self.enabled:
             return
 
-        print("📸 Starting browser for screenshots...")
+        logger.info("Starting browser for screenshots")
 
         # Initialize Playwright browser
         self.playwright = await async_playwright().start()
@@ -61,7 +67,7 @@ class ScreenshotFeature(CrawlerFeature):
         )
 
         self.page = await self.context.new_page()
-        print("📸 Screenshot feature ready")
+        logger.info("Screenshot feature ready")
 
     async def process_url(self, url: str, result: CrawlResult, crawler):
         """Capture screenshot for the given URL"""
@@ -70,14 +76,11 @@ class ScreenshotFeature(CrawlerFeature):
 
         # Only capture screenshots for successful responses
         if result.error or not result.content:
-            print(f"⚠️ Skipping screenshot for {url}: {result.error}")
+            logger.warning(f"Skipping screenshot for {url}: {result.error}")
             return
 
         try:
             # Generate website-based directory and filename
-            from hashlib import md5
-            from urllib.parse import urlparse
-
             parsed_url = urlparse(url)
             domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
             url_hash = md5(url.encode()).hexdigest()[:16]
@@ -95,37 +98,43 @@ class ScreenshotFeature(CrawlerFeature):
             await asyncio.sleep(3)  # Wait for page to fully load
 
             # Handle cookie banners
-            try:
-                cookie_selectors = [
-                    'button[id*="accept"]', 'button[class*="accept"]',
-                    'button[id*="cookie"]', 'button[class*="cookie"]',
-                    '[id*="cookieConsent"] button', '.cookie-banner button'
-                ]
-                for selector in cookie_selectors:
-                    elements = await self.page.query_selector_all(selector)
-                    if elements:
-                        await elements[0].click()
-                        await asyncio.sleep(1)
-                        break
-            except:
-                pass
+            await self._dismiss_cookie_banner()
 
-            # Ensure directory exists
-            Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+            # Capture screenshot to bytes
+            screenshot_bytes = await self.page.screenshot(full_page=True, type='png')
 
-            # Capture screenshot
-            await self.page.screenshot(path=filepath, full_page=True, type='png')
-            print(f"📸 Saved screenshot: {filename}")
+            # Save using storage system (with compression)
+            await crawler.storage.save_content(url, screenshot_bytes, ContentType.SCREENSHOT)
+            logger.debug(f"Saved screenshot: {filename}")
 
         except Exception as e:
-            print(f"❌ Screenshot error for {url}: {e}")
+            logger.error(f"Screenshot error for {url}: {e}")
+
+    async def _dismiss_cookie_banner(self):
+        """Attempt to dismiss cookie consent banners"""
+        try:
+            cookie_selectors = [
+                'button[id*="accept"]', 'button[class*="accept"]',
+                'button[id*="cookie"]', 'button[class*="cookie"]',
+                '[id*="cookieConsent"] button', '.cookie-banner button'
+            ]
+            for selector in cookie_selectors:
+                elements = await self.page.query_selector_all(selector)
+                if not elements:
+                    continue
+
+                await elements[0].click()
+                await asyncio.sleep(1)
+                break
+        except:
+            pass  # Silently ignore cookie banner errors
 
     async def finalize(self, crawler):
         """Clean up screenshot resources"""
         if not self.enabled:
             return
 
-        print("🖼️ Closing browser...")
+        logger.info("Closing browser")
         try:
             if self.page:
                 await self.page.close()
@@ -136,6 +145,6 @@ class ScreenshotFeature(CrawlerFeature):
             if self.playwright:
                 await self.playwright.stop()
         except Exception as e:
-            print(f"⚠️ Error closing browser: {e}")
+            logger.warning(f"Error closing browser: {e}")
 
-        print("🖼️ Screenshot feature cleaned up")
+        logger.info("Screenshot feature cleaned up")
