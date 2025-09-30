@@ -7,6 +7,7 @@ from .base import BaseCrawler
 from ..features.screenshot_feature import ScreenshotFeature
 from ..features.dom_extraction_feature import DOMExtractionFeature
 from ..features.graph_crawling_feature import GraphCrawlingFeature
+from ..features.css_download_feature import CSSDownloadFeature
 
 
 class CrawlerBuilder:
@@ -51,6 +52,12 @@ class CrawlerBuilder:
                 blocked_domains=blocked_domains,
                 priority_domains=priority_domains
             ))
+        return self
+
+    def with_css_download(self, enable: bool = True, max_css_files: int = 50):
+        """Add CSS file downloading capability"""
+        if enable:
+            self.features.append(CSSDownloadFeature(max_css_files=max_css_files))
         return self
 
     def build(self) -> BaseCrawler:

@@ -82,8 +82,8 @@ class DOMTreeExtractor:
         if screenshot_mapping:
             self._link_screenshots_to_nodes(root_node, screenshot_mapping)
 
-        # Save DOM tree to JSON
-        await self._save_dom_tree(root_node, url)
+        # Save DOM tree to JSON via storage
+        await self._save_dom_tree(root_node, url, storage)
 
         return root_node
 
@@ -248,14 +248,14 @@ class DOMTreeExtractor:
                         # Generate unique filename with element index and position
                         selector_safe = self._sanitize_filename(selector)
                         element_id = f"x{int(bounding_box['x'])}_y{int(bounding_box['y'])}"
-                        filename = f"{url_hash}_{timestamp}_{selector_safe}_{i+1}_{element_id}.png"
+                        filename = f"{selector_safe}_{i+1}_{element_id}"
 
                         # Capture screenshot to bytes
                         screenshot_bytes = await element.screenshot(type='png')
 
                         # Save using storage system (with compression)
-                        component_url = f"{url}#component-{selector_safe}-{i+1}-{element_id}"
-                        filepath = await storage.save_content(component_url, screenshot_bytes, ContentType.COMPONENT_SCREENSHOT)
+                        # Use parent URL so component screenshots go in same page directory
+                        filepath = await storage.save_content(url, screenshot_bytes, ContentType.COMPONENT_SCREENSHOT, filename_suffix=filename)
 
                         screenshot_count += 1
                         logger.debug(f"Captured {selector}[{i+1}] -> {filename}")
@@ -304,40 +304,28 @@ class DOMTreeExtractor:
         for child in node.children:
             self._link_screenshots_to_nodes(child, screenshot_mapping)
 
-    async def _save_dom_tree(self, dom_node: DOMNode, url: str):
-        """Save DOM tree structure to JSON file"""
-        # Parse URL for organization
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
-        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        # Create website-based directory structure
-        dom_dir = os.path.join(self.base_output_dir, domain, 'dom_trees')
-        os.makedirs(dom_dir, exist_ok=True)
-
-        filename = f"{url_hash}_{timestamp}_dom_tree.json"
-        filepath = os.path.join(dom_dir, filename)
-
+    async def _save_dom_tree(self, dom_node: DOMNode, url: str, storage):
+        """Save DOM tree structure to JSON file via storage class"""
         # Convert to dictionary for JSON serialization
         tree_data = {
             'url': url,
-            'domain': domain,
+            'url_hash': hashlib.md5(url.encode()).hexdigest()[:12],
             'dom_tree': self._dom_node_to_dict(dom_node),
             'metadata': {
                 'total_nodes': self._count_nodes(dom_node),
                 'max_depth': self._get_max_depth(dom_node),
-                'extraction_timestamp': datetime.now().isoformat(),
-                'component_screenshot_dir': os.path.join(self.base_output_dir, domain, 'component_screenshots')
+                'extraction_timestamp': datetime.now().isoformat()
             }
         }
 
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(tree_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"DOM tree saved: {filename}")
-        except Exception as e:
-            logger.error(f"Failed to save DOM tree: {e}")
+        # Save via storage class
+        tree_json = json.dumps(tree_data, indent=2, ensure_ascii=False)
+        filepath = await storage.save_content(url, tree_json, ContentType.DOM_TREE)
+
+        if filepath:
+            logger.info(f"DOM tree saved for {url}")
+        else:
+            logger.error(f"Failed to save DOM tree for {url}")
 
     def _dom_node_to_dict(self, node: DOMNode) -> Dict[str, Any]:
         """Convert DOMNode to dictionary for JSON serialization"""

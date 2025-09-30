@@ -41,18 +41,23 @@ class FileStorage:
             ContentType.COMPONENT_SCREENSHOT
         ]
 
-    def get_file_path(self, url: str, content_type: ContentType) -> Path:
-        """Generate a file path for storing content organized by website
+    def get_file_path(self, url: str, content_type: ContentType, filename_suffix: str = None) -> Path:
+        """Generate a file path for storing content organized by domain/page_id
 
         Args:
             url: The URL being stored
             content_type: ContentType enum
+            filename_suffix: Optional suffix to add to filename (for component screenshots)
 
         Returns:
             Path object for the file
+
+        Structure:
+        - Single files (HTML, CSS, DOM tree, screenshot): crawl_data/domain/page_id/content_type.ext
+        - Multiple files (component screenshots): crawl_data/domain/page_id/component_screenshots/filename.ext
         """
-        # Create a hash of the URL for filename
-        url_hash = hashlib.md5(url.encode()).hexdigest()[:16]  # Shorter hash
+        # Create a hash of the URL for unique page identifier
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]  # Page identifier
 
         # Extract domain for organization
         domain = urlparse(url).netloc
@@ -71,28 +76,39 @@ class FileStorage:
         }
         extension = extensions.get(content_type, '.txt')
 
-        # Construct filename with timestamp for uniqueness
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{url_hash}_{timestamp}{extension}"
+        # Base page directory
+        page_dir = self.base_path / clean_domain / url_hash
 
-        # Website-based directory structure: crawl_data/domain/content_type/
-        file_path = self.base_path / clean_domain / content_type.value / filename
+        # Component screenshots go in subdirectory (multiple files)
+        if content_type == ContentType.COMPONENT_SCREENSHOT:
+            filename = f"{filename_suffix}{extension}" if filename_suffix else f"component{extension}"
+            file_path = page_dir / "component_screenshots" / filename
+        # CSS files go in subdirectory (multiple files)
+        elif content_type == ContentType.CSS:
+            filename = f"{filename_suffix}{extension}" if filename_suffix else f"styles{extension}"
+            file_path = page_dir / "css" / filename
+        else:
+            # Single files (HTML, DOM tree, screenshot) go directly in page directory
+            filename = f"{content_type.value}{extension}"
+            file_path = page_dir / filename
+
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         return file_path
 
-    async def save_content(self, url: str, content, content_type: ContentType) -> str:
+    async def save_content(self, url: str, content, content_type: ContentType, filename_suffix: str = None) -> str:
         """Save content to file and return the file path
 
         Args:
             url: The URL being stored
             content: The content to store (str or bytes)
             content_type: ContentType enum
+            filename_suffix: Optional suffix for filename (for component screenshots)
 
         Returns:
             File path as string, or None if save failed
         """
-        file_path = self.get_file_path(url, content_type)
+        file_path = self.get_file_path(url, content_type, filename_suffix)
 
         try:
             # Handle text content (HTML, CSS, JSON)
@@ -144,6 +160,27 @@ class FileStorage:
         """Save crawl metadata as JSON"""
         metadata_json = json.dumps(metadata, indent=2, ensure_ascii=False)
         return await self.save_content(url, metadata_json, ContentType.JSON)
+
+    async def save_page_metadata(self, url: str) -> str:
+        """Save basic page metadata with URL mapping"""
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+        domain = urlparse(url).netloc.replace('www.', '').replace(':', '_')
+
+        metadata = {
+            'url': url,
+            'url_hash': url_hash,
+            'domain': domain,
+            'crawled_at': datetime.now().isoformat()
+        }
+
+        # Save metadata.json in the page directory
+        metadata_path = self.base_path / domain / url_hash / 'metadata.json'
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+
+        async with aiofiles.open(metadata_path, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(metadata, indent=2, ensure_ascii=False))
+
+        return str(metadata_path)
 
     def get_storage_stats(self):
         """Get storage statistics"""

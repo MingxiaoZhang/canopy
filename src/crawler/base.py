@@ -5,6 +5,7 @@ Base Crawler - Core crawling functionality with composable features
 import aiohttp
 import time
 import logging
+import heapq
 from typing import List
 from ..features.base import CrawlerFeature
 from .result import CrawlResult
@@ -31,7 +32,11 @@ class BaseCrawler:
         self.visited = set()
         self.pages_crawled = 0
         self.session = None
-        self.storage = FileStorage()
+        self.storage = FileStorage(compress=False)
+
+        # URL queue for dynamic crawling
+        self.url_queue = []
+        self.queued_urls = set()  # Track URLs already in queue to avoid duplicates
 
         # Built-in logging
         self.log_manager = LogManager(log_dir="crawl_data/logs", log_level="INFO")
@@ -50,6 +55,31 @@ class BaseCrawler:
         """Add a feature to this crawler"""
         self.features.append(feature)
         return self
+
+    def add_url_to_queue(self, url: str, priority: int = 0):
+        """Add a URL to the crawl queue (can be called by features)
+
+        Uses a min-heap with negated priorities for efficient O(log n) insertion.
+        Higher priority values are processed first.
+        """
+        if url not in self.queued_urls and url not in self.visited:
+            # Use negative priority for max-heap behavior (heapq is min-heap)
+            heapq.heappush(self.url_queue, (-priority, url))
+            self.queued_urls.add(url)
+
+    def fetch_next_url(self):
+        """Fetch the next URL from the priority queue
+
+        Returns:
+            str: The next URL to crawl, or None if queue is empty
+        """
+        if not self.url_queue:
+            return None
+
+        # Pop highest priority URL (O(log n) with heapq)
+        neg_priority, url = heapq.heappop(self.url_queue)
+        self.queued_urls.discard(url)
+        return url
 
     async def crawl(self) -> None:
         """Main crawling workflow"""
@@ -92,9 +122,15 @@ class BaseCrawler:
 
     async def _crawl_loop(self):
         """Core crawling loop with real HTTP fetching"""
+        # Initialize queue with start URLs
         for url in self.start_urls:
-            if self.pages_crawled >= self.max_pages:
-                break
+            self.add_url_to_queue(url, priority=1000)  # Start URLs get highest priority
+
+        # Process URLs from the queue
+        while self.pages_crawled < self.max_pages:
+            url = self.fetch_next_url()
+            if url is None:
+                break  # Queue is empty
 
             # Check deduplication
             if self.deduplication_manager:
@@ -168,14 +204,11 @@ class BaseCrawler:
                     parser = HTMLParser(url)
                     parsed_data = parser.parse(content)
 
+                    # Save page metadata (URL mapping)
+                    await self.storage.save_page_metadata(url)
+
                     # Save HTML content
                     await self.storage.save_content(url, content, ContentType.HTML)
-
-                    # Save inline CSS if present
-                    if parsed_data.get('inline_css'):
-                        # Join all CSS blocks into a single string
-                        css_content = '\n\n'.join(parsed_data['inline_css'])
-                        await self.storage.save_content(url, css_content, ContentType.CSS)
 
                     return CrawlResult(
                         url=url,

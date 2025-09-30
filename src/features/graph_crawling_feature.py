@@ -73,6 +73,10 @@ class GraphCrawlingFeature(CrawlerFeature):
             if discovered_links:
                 logger.info(f"Discovered {len(discovered_links)} links from {url}")
 
+                # Add discovered links to crawler's queue
+                for link in discovered_links:
+                    crawler.add_url_to_queue(link.url, priority=link.priority)
+
                 # Show high-priority links
                 high_priority_links = [
                     link for link in discovered_links

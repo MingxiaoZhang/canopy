@@ -20,10 +20,11 @@ async def test_websites():
     print("🕸️ Testing Graph Crawler with Multiple Websites")
     print("=" * 60)
 
-    # Create crawler with graph crawling, screenshots, and DOM extraction
+    # Create crawler with graph crawling, screenshots, DOM extraction, and CSS download
     crawler = (CrawlerBuilder(test_urls)
                .max_pages(15)                  # Crawl up to 15 pages total
                .with_screenshots()              # Capture screenshots
+               .with_css_download()             # Download external CSS files
                .with_dom_extraction(            # Extract DOM structure
                    max_depth=8,
                    capture_screenshots=True     # Capture component screenshots

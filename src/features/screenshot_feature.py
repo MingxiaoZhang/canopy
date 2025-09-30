@@ -80,19 +80,6 @@ class ScreenshotFeature(CrawlerFeature):
             return
 
         try:
-            # Generate website-based directory and filename
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc.replace('www.', '').replace(':', '_')
-            url_hash = md5(url.encode()).hexdigest()[:16]
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-            # Create website-based directory structure
-            screenshot_dir = os.path.join("crawl_data", domain, "screenshot")
-            os.makedirs(screenshot_dir, exist_ok=True)
-
-            filename = f"{url_hash}_{timestamp}.png"
-            filepath = os.path.join(screenshot_dir, filename)
-
             # Navigate to URL and capture screenshot
             await self.page.goto(url, wait_until='networkidle', timeout=30000)
             await asyncio.sleep(3)  # Wait for page to fully load
@@ -105,7 +92,7 @@ class ScreenshotFeature(CrawlerFeature):
 
             # Save using storage system (with compression)
             await crawler.storage.save_content(url, screenshot_bytes, ContentType.SCREENSHOT)
-            logger.debug(f"Saved screenshot: {filename}")
+            logger.debug(f"Saved screenshot for {url}")
 
         except Exception as e:
             logger.error(f"Screenshot error for {url}: {e}")
