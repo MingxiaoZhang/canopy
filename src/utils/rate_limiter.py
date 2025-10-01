@@ -21,7 +21,7 @@ class DomainSettings:
     user_agent_allowed: bool = True
 
 class RateLimiter:
-    def __init__(self, default_delay=1.0, max_concurrent_per_domain=1, user_agent="TarzanCrawler/1.0"):
+    def __init__(self, default_delay=1.0, max_concurrent_per_domain=1, user_agent="CanopyCrawler/1.0"):
         self.default_delay = default_delay
         self.max_concurrent_per_domain = max_concurrent_per_domain
         self.user_agent = user_agent

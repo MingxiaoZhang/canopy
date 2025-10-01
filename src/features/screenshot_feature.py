@@ -63,7 +63,7 @@ class ScreenshotFeature(CrawlerFeature):
 
         self.context = await self.browser.new_context(
             viewport={'width': self.viewport_width, 'height': self.viewport_height},
-            user_agent='Mozilla/5.0 (compatible; TarzanCrawler/1.0 Webkit) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (compatible; CanopyCrawler/1.0 Webkit) AppleWebKit/537.36'
         )
 
         self.page = await self.context.new_page()

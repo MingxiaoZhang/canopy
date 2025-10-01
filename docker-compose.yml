@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  tarzan-crawler:
+  canopy-crawler:
     build: .
-    container_name: tarzan-web-crawler
+    container_name: canopy-web-crawler
     volumes:
       # Mount crawl data to persist outside container
       - ./crawl_data:/app/crawl_data
@@ -33,7 +33,7 @@ services:
   # Optional: Redis for future queue-based crawling
   # redis:
   #   image: redis:7-alpine
-  #   container_name: tarzan-redis
+  #   container_name: canopy-redis
   #   ports:
   #     - "6379:6379"
   #   volumes:

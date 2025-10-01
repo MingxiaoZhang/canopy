@@ -188,7 +188,7 @@ class BaseCrawler:
         start_time = time.time()
 
         try:
-            headers = {'User-Agent': 'TarzanCrawler/2.0'}
+            headers = {'User-Agent': 'CanopyCrawler/1.0'}
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with self.session.get(url, headers=headers, timeout=timeout) as response:

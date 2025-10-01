@@ -62,7 +62,7 @@ class CSSDownloadFeature(CrawlerFeature):
         """Download a single CSS file"""
         try:
             # Use crawler's session to download CSS
-            headers = {'User-Agent': 'TarzanCrawler/2.0'}
+            headers = {'User-Agent': 'CanopyCrawler/1.0'}
             timeout = aiohttp.ClientTimeout(total=10)
 
             async with crawler.session.get(css_url, headers=headers, timeout=timeout) as response:

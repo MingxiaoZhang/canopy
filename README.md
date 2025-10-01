@@ -1,4 +1,4 @@
-# Tarzan Web Crawler
+# Canopy Web Crawler
 
 A large-scale web crawler built in Python with a modular architecture for extracting HTML, CSS, screenshots, and DOM structures from websites.
 
@@ -60,8 +60,8 @@ await crawler.crawl()
 docker-compose up --build
 
 # Or with plain Docker
-docker build -t tarzan-crawler .
-docker run -v $(pwd)/crawl_data:/app/crawl_data tarzan-crawler
+docker build -t canopy-crawler .
+docker run -v $(pwd)/crawl_data:/app/crawl_data canopy-crawler
 ```
 
 ### Local Installation
@@ -290,7 +290,7 @@ docker-compose up --build
 docker-compose logs -f
 
 # Run specific example in container
-docker run tarzan-crawler python examples/graph_crawling.py
+docker run canopy-crawler python examples/graph_crawling.py
 ```
 
 ### Testing

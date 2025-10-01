@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tarzan Web Crawler
+Canopy Web Crawler
 A large-scale web crawler for extracting HTML, CSS, and screenshots
 """
 
@@ -27,7 +27,7 @@ async def main():
     print(f"\n✅ Crawled {crawler.pages_crawled} pages successfully!")
 
 if __name__ == "__main__":
-    print("🌿 Tarzan Web Crawler Starting...")
+    print("🌿 Canopy Web Crawler Starting...")
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
