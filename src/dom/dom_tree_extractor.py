@@ -110,6 +110,9 @@ class DOMTreeExtractor:
         text_content = None
         if isinstance(element, NavigableString):
             text_content = str(element).strip()
+            # Skip empty text nodes (whitespace only)
+            if not text_content:
+                return None
         elif hasattr(element, 'get_text'):
             # Get only direct text content
             direct_text = ''.join([str(child) for child in element.children
